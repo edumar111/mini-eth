@@ -1,7 +1,7 @@
 ## mini-eth
 Project to learn how to develop a blockchain node client
 ##
-
+```
 mini-eth/
 ├── cmd/
 │   └── mini-eth/        # Programa principal (CLI)
@@ -21,7 +21,7 @@ mini-eth/
 ├── cli/
 │   └── commands.go      # Comandos de la CLI (start node, init genesis, etc.)
 └── go.mod
-
+```
 RPC
 
     curl -X POST --data '{"jsonrpc":"2.0","method":"ping","params":[],"id":1}' http://127.0.0.1:4045/rpc
