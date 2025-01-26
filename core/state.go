@@ -11,6 +11,7 @@ import (
 // State representaría la estructura de balances y su Merkle Trie
 type State struct {
 	Balances   map[string]uint64
+	Nonces     map[string]uint64
 	merkleTree *merkletree.MerkleTree
 }
 
@@ -32,8 +33,18 @@ func (l Leaf) Equals(other merkletree.Content) (bool, error) {
 func NewState() *State {
 	return &State{
 		Balances:   make(map[string]uint64),
+		Nonces:     make(map[string]uint64),
 		merkleTree: nil,
 	}
+}
+
+// Métodos para manipular Nonces
+func (s *State) GetNonce(address string) uint64 {
+	return s.Nonces[address]
+}
+
+func (s *State) IncrementNonce(address string) {
+	s.Nonces[address] = s.Nonces[address] + 1
 }
 
 // UpdateMerkle actualiza la Merkle Trie del State

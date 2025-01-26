@@ -6,6 +6,7 @@ import (
 	"github.com/edumar111/my-geth-edu/rpc"
 	"github.com/spf13/cobra"
 	"log"
+	"strconv"
 )
 
 func InitCmd() *cobra.Command {
@@ -18,41 +19,54 @@ func InitCmd() *cobra.Command {
 		},
 	}
 }
+
 func RunCmd() *cobra.Command {
-	var rpcPort string
-	var wsPort string
 	var p2pPort int
+	var rpcHTTPPort int
+	var rpcWSPort int
 
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Inicia el nodo",
 		Run: func(cmd *cobra.Command, args []string) {
-			// 1. Cargar génesis y cadena
+			// 1. Cargar génesis (o cargar de disco)
 			genesis := core.CreateGenesisBlock()
 			log.Printf("Genesis block hash: %s\n", genesis.Hash())
 
-			// 2. Iniciar P2P
+			// 2. Creamos un State (o cargamos balances, nonces, etc.)
+			state := core.NewState()
+			// (Opcional) Asignar balances o nonces iniciales
+
+			// 3. Iniciar P2P
 			server, err := p2p.NewP2PServer(p2pPort)
 			if err != nil {
 				log.Fatal("Error al iniciar P2P:", err)
 			}
 			defer server.Shutdown()
 
-			// 3. Iniciar RPC
-			rpcServer := &rpc.RPCServer{}
-			go rpcServer.StartRPC(rpcPort)
+			// 4. Creamos el RPCServer con referencia a nuestro State
+			rpcServer := &rpc.RPCServer{
+				State: state,
+			}
+			rpcServer.StartRPC(strconv.Itoa(rpcHTTPPort))
+			//go rpcServer.StartRPC(strconv.Itoa(rpcHTTPPort))
 
-			// 4. Iniciar WS
-			go rpcServer.StartWS(wsPort)
+			// 5. Servidor WebSocket (en "/")
+			wsServer := &rpc.RPCWSServer{
+				State: state,
+			}
+			wsServer.StartWS(strconv.Itoa(rpcWSPort))
+			//go rpcServer.StartWS(strconv.Itoa(rpcWSPort))
 
-			// Bloquear para que la aplicación no termine
+			log.Printf("Node running on P2P port %d, RPC HTTP %d, WS %d", p2pPort, rpcHTTPPort, rpcWSPort)
 			select {}
 		},
 	}
 
-	cmd.Flags().StringVar(&rpcPort, "rpc", "4045", "Puerto para RPC HTTP")
-	cmd.Flags().StringVar(&wsPort, "ws", "4046", "Puerto para WS")
-	cmd.Flags().IntVar(&p2pPort, "p2p", 30303, "Puerto para P2P")
+	// Definimos los flags
+	cmd.Flags().IntVar(&p2pPort, "p2p-port", 30303, "Puerto para P2P")
+	cmd.Flags().IntVar(&rpcHTTPPort, "rpc-http-port", 4045, "Puerto para RPC HTTP")
+	cmd.Flags().IntVar(&rpcWSPort, "rpc-ws-port", 4046, "Puerto para RPC WebSocket")
 
 	return cmd
 }

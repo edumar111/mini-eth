@@ -4,10 +4,11 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/edumar111/my-geth-edu/core"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-
-	"github.com/gorilla/websocket"
+	"strconv"
 )
 
 var upgrader = websocket.Upgrader{}
@@ -26,78 +27,117 @@ type RPCResponse struct {
 	Error   interface{} `json:"error,omitempty"`
 	ID      int         `json:"id"`
 }
-
-// Inicia el servidor WebSocket
-func (srv *RPCServer) StartWS(port string) {
-	http.HandleFunc("/ws", srv.wsHandler)
-	log.Printf("Starting WS on port %s\n", port)
-	// Nota: En producción, maneja mejor los errores de ListenAndServe
-	http.ListenAndServe(":"+port, nil)
+type RPCWSServer struct {
+	// Aquí también podemos almacenar un State o Blockchain
+	State *core.State
 }
 
-func (srv *RPCServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+// Inicia el servidor WebSocket
+func (wsServer *RPCWSServer) StartWS(port string) {
+	mux := http.NewServeMux()
+	// Todas las peticiones a "/" en este puerto se tratarán como WebSocket
+	mux.HandleFunc("/", wsServer.wsHandler)
+
+	log.Printf("[WS-RPC] Listening on port %s (path /)\n", port)
+
+	go func() {
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			log.Fatalf("Error starting WS-RPC on port %s: %v", port, err)
+		}
+	}()
+}
+func (wsServer *RPCWSServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, "Could not open websocket connection", http.StatusBadRequest)
 		return
 	}
-	go srv.handleConnection(conn)
+	go wsServer.handleConnection(conn)
 }
-
-func (srv *RPCServer) handleConnection(conn *websocket.Conn) {
+func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
 
 	for {
 		// Leemos el mensaje entrante
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Error reading WS message:", err)
+			// Ver si es un error de cierre "normal" o uno "anormal".
+			// isCloseError revisa el código de cierre.
+			if websocket.IsCloseError(err,
+				websocket.CloseNormalClosure,
+				websocket.CloseGoingAway,
+				websocket.CloseNoStatusReceived,
+				// Se pueden agregar otros que desees ignorar
+			) {
+				log.Printf("Conexión WS cerrada de forma normal: %v", err)
+			} else {
+				log.Printf("Error leyendo mensaje WS: %v", err)
+			}
 			return
 		}
 
-		// Intentamos decodificar el mensaje a nuestra estructura RPCRequest
 		var request RPCRequest
 		if err := json.Unmarshal(msg, &request); err != nil {
 			log.Println("Error unmarshaling request:", err)
-			// Respondemos con un error de parseo
-			srv.sendError(conn, -1, "Invalid JSON format")
+			wsServer.sendError(conn, request.ID, "Invalid JSON format")
 			continue
 		}
 
-		// Creamos un objeto de respuesta
 		response := RPCResponse{
 			JSONRPC: "2.0",
 			ID:      request.ID,
 		}
 
-		// Revisamos el método
 		switch request.Method {
 		case "ping":
-			// Si el método es "ping", respondemos con "pong"
 			response.Result = "pong"
 
+		case "eth_getTransactionCount":
+			nonceHex, err := wsServer.handleGetTransactionCount(request.Params)
+			if err != nil {
+				response.Error = err.Error()
+			} else {
+				response.Result = nonceHex
+			}
+
 		default:
-			// Si no se reconoce el método, enviamos un error
 			response.Error = fmt.Sprintf("Method '%s' not found", request.Method)
 		}
 
-		// Enviamos la respuesta como JSON
 		respBytes, err := json.Marshal(response)
 		if err != nil {
 			log.Println("Error marshaling response:", err)
 			continue
 		}
 
-		// Mandamos el mensaje de vuelta al cliente WebSocket
 		if err := conn.WriteMessage(websocket.TextMessage, respBytes); err != nil {
 			log.Println("Error writing WS message:", err)
 			return
 		}
 	}
 }
+func (wsServer *RPCWSServer) handleGetTransactionCount(params []interface{}) (string, error) {
+	if len(params) < 2 {
+		return "", fmt.Errorf("invalid params")
+	}
+	address, ok := params[0].(string)
+	if !ok {
+		return "", fmt.Errorf("invalid address param")
+	}
+	blockParam, ok := params[1].(string)
+	if !ok {
+		return "", fmt.Errorf("invalid block param")
+	}
+	if blockParam != "latest" {
+		return "", fmt.Errorf("only 'latest' supported")
+	}
+
+	nonce := wsServer.State.GetNonce(address)
+	return "0x" + strconv.FormatUint(nonce, 16), nil
+}
 
 // Método auxiliar para enviar un error si el mensaje no es válido
-func (srv *RPCServer) sendError(conn *websocket.Conn, id int, errMsg string) {
+func (wsServer *RPCWSServer) sendError(conn *websocket.Conn, id int, errMsg string) {
 	response := RPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
