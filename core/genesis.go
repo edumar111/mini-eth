@@ -3,7 +3,7 @@ package core
 
 func CreateGenesisBlock() *Block {
 	// Podríamos configurar un "alloc" de cuentas, balances iniciales, etc.
-	genesisTxs := []*Transaction{
+	genesisTxs := []*RawTx{
 		// Transacciones especiales para asignar tokens a ciertas direcciones
 	}
 

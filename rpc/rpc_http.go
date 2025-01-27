@@ -2,18 +2,22 @@
 package rpc
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/edumar111/my-geth-edu/core"
+	"github.com/ethereum/go-ethereum/rlp"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type RPCServer struct {
 	// Podríamos tener referencia al objeto State, Blockchain, etc.
 	// Referencia a State o a la blockchain. Aquí supongamos State directamente.
-	State *core.State
+	State      *core.State
+	Blockchain []*core.Block
 }
 
 // StartRPC arranca un servidor HTTP en el puerto indicado,
@@ -59,7 +63,13 @@ func (srv *RPCServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		} else {
 			response.Result = nonceHex
 		}
-
+	case "eth_sendRawTransaction":
+		txHash, err := srv.handleSendRawTransaction(req.Params)
+		if err != nil {
+			response.Error = err.Error()
+		} else {
+			response.Result = txHash // Retornamos un "txHash" por ejemplo
+		}
 	// Otros métodos (ping, sendTransaction, etc.)
 
 	default:
@@ -69,6 +79,65 @@ func (srv *RPCServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 	respBytes, _ := json.Marshal(response)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(respBytes)
+}
+
+// handleSendRawTransaction decodifica la TX en hex RLP, la firma y la inserta en un nuevo bloque
+func (srv *RPCServer) handleSendRawTransaction(params []interface{}) (string, error) {
+	//TODO solo para probar la demo****************
+	srv.State.Nonces["0x4709421B04e70e3925dFC86307727b588709C7bB"] = 1
+	srv.State.Balances["0x4709421B04e70e3925dFC86307727b588709C7bB"] = 9000000000000000000 //9 ETH
+	// Esperamos un array con 1 string en hex
+	if len(params) < 1 {
+		return "", fmt.Errorf("missing parameter")
+	}
+	rawHex, ok := params[0].(string)
+	if !ok {
+		return "", fmt.Errorf("invalid param type")
+	}
+
+	// Removemos "0x" si existe
+	rawHex = strings.TrimPrefix(rawHex, "0x")
+
+	// Decodificamos hex a bytes
+	rawBytes, err := hex.DecodeString(rawHex)
+	if err != nil {
+		return "", fmt.Errorf("hex decode error: %v", err)
+	}
+
+	// Decodificar via RLP
+	var rawTx core.RawTx
+	err = rlp.DecodeBytes(rawBytes, &rawTx)
+	if err != nil {
+		return "", fmt.Errorf("RLP decode error: %v", err)
+	}
+
+	// Verificar firma y extraer "from" address
+	fromAddr, err := rawTx.VerifySignature()
+	if err != nil {
+		return "", fmt.Errorf("signature verify error: %v", err)
+	}
+
+	// Crear una transacción "interna" en nuestro State
+	/*decodedTx := core.DecodedTx{
+		Nonce: rawTx.Nonce,
+		From:  fromAddr,
+		To:    rawTx.To,
+		Value: rawTx.Value,
+		V:     rawTx.V,
+		R:     rawTx.R,
+		S:     rawTx.S,
+	}*/
+
+	// Aplicar la transacción al State
+	// (aquí simplificamos: ignoramos gas, etc.)
+	txHash, applyErr := rawTx.ApplyTxAndCreateBlock(fromAddr, srv.Blockchain, srv.State)
+	if applyErr != nil {
+		return "", applyErr
+	}
+
+	// Por convención, podríamos retornar un "txHash" que sería Keccak(rlp(tx))
+
+	return txHash, nil
 }
 
 // handleGetTransactionCount extrae el nonce y lo devuelve en hex
@@ -94,3 +163,74 @@ func (srv *RPCServer) handleGetTransactionCount(params []interface{}) (string, e
 	nonceHex := "0x" + strconv.FormatUint(nonce, 16)
 	return nonceHex, nil
 }
+
+// / que nos handles
+// applyTxAndCreateBlock añade la TX a un nuevo bloque, lo aplica al State y actualiza el blockchain
+/*func (srv *RPCServer) applyTxAndCreateBlock(tx core.DecodedTx) error {
+	// 1. Validar nonce
+	currentNonce := srv.State.GetNonce(tx.From.Hex())
+	fmt.Printf("From: %s \n", tx.From.Hex())
+	fmt.Printf("currentNonce %d \n", currentNonce)
+	if tx.Nonce != currentNonce {
+		return fmt.Errorf("invalid nonce: got %d, expected %d", tx.Nonce, currentNonce)
+	}
+
+	// 2. Validar balance
+	fmt.Printf("From: %s Balance: %d \n", tx.From.Hex(), srv.State.Balances[tx.From.Hex()])
+	balance := srv.State.Balances[tx.From.Hex()]
+	txValue := tx.Value.Uint64()
+	fmt.Printf("txValue: %d \n", txValue)
+	if balance < txValue {
+		return fmt.Errorf("insufficient balance")
+	}
+	// 3. Aplicar transacción (transferencia)
+	srv.State.Balances[tx.From.Hex()] = balance - txValue
+	srv.State.Balances[tx.To.Hex()] = srv.State.Balances[tx.To.Hex()] + txValue
+	srv.State.IncrementNonce(tx.From.Hex())
+	srv.State.UpdateMerkle()
+
+	// 4. Crear un nuevo bloque con esta TX
+	//newBlock := srv.createBlock([]core.DecodedTx{tx})
+	rawTx := core.RawTx{
+		To:    tx.To,
+		Value: tx.Value,
+		Nonce: tx.Nonce,
+		V:     tx.V,
+		R:     tx.R,
+		S:     tx.S,
+	}
+	stateRoot, _ := srv.State.Root()
+	newBlock := core.CreateBlock(srv.Blockchain, []core.RawTx{rawTx}, stateRoot)
+	// Lo añadimos a la "blockchain" (en tu caso, podrías tener un array de bloques)
+	srv.Blockchain = append(srv.Blockchain, newBlock)
+
+	// (Opcional) Llamar a tu mecanismo de consenso, broadcast, etc.
+	log.Printf("New block created #%d with 1 TX\n", newBlock.Header.BlockNumber)
+	return nil
+}*/
+
+// createBlock ejemplo simplificado
+/*
+func (srv *RPCServer) createBlock(rawTxs []core.RawTx) *core.Block {
+
+	var txPointers []*core.RawTx
+	for _, rt := range rawTxs {
+		txCopy := rt // para evitar issues de range
+		txPointers = append(txPointers, &txCopy)
+	}
+
+	parentHash := "0x0"
+	if len(srv.Blockchain) > 0 {
+		parentHash = srv.Blockchain[len(srv.Blockchain)-1].Hash()
+	}
+	blockNumber := uint64(len(srv.Blockchain))
+
+	// Obtener stateRoot si lo necesitas
+	stateRoot, _ := srv.State.Root()
+
+	// Crear el bloque
+	block := core.NewBlock(parentHash, blockNumber, txPointers, stateRoot)
+	// Anexar el bloque a tu chain
+	srv.Blockchain = append(srv.Blockchain, block)
+	return block
+}*/

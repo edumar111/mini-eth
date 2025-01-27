@@ -99,7 +99,13 @@ func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 			} else {
 				response.Result = nonceHex
 			}
-
+		/*case "eth_sendRawTransaction":
+		txHash, err := wsServer.handleSendRawTransaction(request.Params)
+		if err != nil {
+			response.Error = err.Error()
+		} else {
+			response.Result = txHash
+		}*/
 		default:
 			response.Error = fmt.Sprintf("Method '%s' not found", request.Method)
 		}
@@ -116,6 +122,7 @@ func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 		}
 	}
 }
+
 func (wsServer *RPCWSServer) handleGetTransactionCount(params []interface{}) (string, error) {
 	if len(params) < 2 {
 		return "", fmt.Errorf("invalid params")
