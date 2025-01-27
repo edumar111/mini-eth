@@ -109,6 +109,13 @@ func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 			} else {
 				response.Result = txHash
 			}
+		case "eth_getTransactionReceipt":
+			txHash, err := HandleSendRawTransaction(nodoRPC, request.Params)
+			if err != nil {
+				response.Error = err.Error()
+			} else {
+				response.Result = txHash
+			}
 		default:
 			response.Error = fmt.Sprintf("Method '%s' not found", request.Method)
 		}

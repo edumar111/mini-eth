@@ -128,7 +128,7 @@ func (tx *RawTx) ApplyTxAndCreateBlock(from common.Address, chain []*Block, stat
 	newBlock := CreateBlock(chain, []RawTx{*tx}, stateRoot)
 	// Lo añadimos a la "blockchain" (en tu caso, podrías tener un array de bloques)
 	chain = append(chain, newBlock)
-
+	fmt.Printf("chain: %v \n", chain)
 	// (Opcional) Llamar a tu mecanismo de consenso, broadcast, etc.
 	log.Printf("New block created #%d with 1 TX\n", newBlock.Header.BlockNumber)
 

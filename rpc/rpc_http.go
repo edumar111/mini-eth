@@ -66,6 +66,13 @@ func (srv *RPCServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		} else {
 			response.Result = txHash // Retornamos un "txHash" por ejemplo
 		}
+	case "eth_getTransactionReceipt":
+		txHash, err := HandleGetTransactionReceipt(srv, req.Params)
+		if err != nil {
+			response.Error = err.Error()
+		} else {
+			response.Result = txHash // Retornamos un "txHash" por ejemplo
+		}
 	// Otros métodos (ping, sendTransaction, etc.)
 
 	default:
