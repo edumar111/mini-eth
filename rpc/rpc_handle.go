@@ -74,7 +74,8 @@ func HandleSendRawTransaction(srv *RPCServer, params []interface{}) (string, err
 
 	// Aplicar la transacción al State
 	// (aquí simplificamos: ignoramos gas, etc.)
-	txHash, applyErr := rawTx.ApplyTxAndCreateBlock(fromAddr, srv.Blockchain, srv.State)
+	txHash, applyErr := rawTx.ApplyTxAndCreateBlock(fromAddr, &srv.Blockchain, srv.State)
+	fmt.Printf("blockchain final %v+", srv.Blockchain)
 	if applyErr != nil {
 		return "", applyErr
 	}
@@ -163,13 +164,16 @@ func bigIntToHex(x *big.Int) string {
 }
 func findTransactionByHash(srv *RPCServer, hashBytes []byte) (int, int, *core.RawTx) {
 	wantedHash := common.BytesToHash(hashBytes)
-	fmt.Printf("Find txHash %x\n", wantedHash)
+
+	fmt.Println("Find wantedHash", wantedHash)
 	fmt.Printf("Blockchain size: %d \n", len(srv.Blockchain))
 	for bIndex, block := range srv.Blockchain {
+		fmt.Println("Find block", bIndex)
+		fmt.Printf("Transactions size: %d \n", len(block.Transactions))
 		for tIndex, tx := range block.Transactions {
-			fmt.Printf("Transactions size: %d \n", len(block.Transactions))
-			txHash := calculateTxHash(tx)
-			fmt.Println("Find txHash", txHash)
+			txHash := common.BytesToHash(RawTxHash(tx))
+			//txHash := tx.
+			fmt.Println("found txHash ", txHash)
 			if txHash == wantedHash {
 				return bIndex, tIndex, tx
 			}
@@ -177,7 +181,25 @@ func findTransactionByHash(srv *RPCServer, hashBytes []byte) (int, int, *core.Ra
 	}
 	return -1, -1, nil
 }
+func RawTxHash(tx *core.RawTx) []byte {
+	// O usar rlp.EncodeToBytes(...)
+	// Para ejemplo, supongamos un keccak256 de:
+	// nonce + to + value
+	toBytes := tx.To.Bytes()
+	data := append(
+		append(
+			common.BigToHash(new(big.Int).SetUint64(tx.Nonce)).Bytes(),
+			toBytes...,
+		),
+		tx.Value.Bytes()...,
+	)
+	h := crypto.Keccak256Hash(data)
+	return h.Bytes()
+}
+
+/*
 func calculateTxHash(rawTx *core.RawTx) common.Hash {
+
 	encoded, _ := rlp.EncodeToBytes(rawTx)
 	return common.BytesToHash(crypto.Keccak256(encoded))
-}
+}*/

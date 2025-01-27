@@ -46,14 +46,16 @@ func RunCmd() *cobra.Command {
 
 			// 4. Creamos el RPCServer con referencia a nuestro State
 			rpcServer := &rpc.RPCServer{
-				State: state,
+				State:      state,
+				Blockchain: []*core.Block{genesis}, // Inicia la Blockchain con Génesis
 			}
 			rpcServer.StartRPC(strconv.Itoa(rpcHTTPPort))
 			//go rpcServer.StartRPC(strconv.Itoa(rpcHTTPPort))
 
 			// 5. Servidor WebSocket (en "/")
 			wsServer := &rpc.RPCWSServer{
-				State: state,
+				State:      state,
+				Blockchain: []*core.Block{genesis},
 			}
 			wsServer.StartWS(strconv.Itoa(rpcWSPort))
 			//go rpcServer.StartWS(strconv.Itoa(rpcWSPort))

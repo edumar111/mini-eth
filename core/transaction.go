@@ -26,6 +26,16 @@ type RawTx struct {
 	S *big.Int
 }
 
+func (tx *RawTx) From() string {
+	// Lógica simplificada para obtener la dirección "From"
+	// En un escenario real se usaría la firma (V,R,S).
+	return "0xFromAddress0000000000000000000000000000000000"
+}
+
+func (tx *RawTx) ToAddr() common.Address {
+	return tx.To
+}
+
 // DecodedTx es lo que usaremos tras decodificar la TX RLP y verificar la firma
 type DecodedTx struct {
 	Nonce   uint64
@@ -97,7 +107,7 @@ func RawTxHash(tx *RawTx) []byte {
 }
 
 // applyTxAndCreateBlock añade la TX a un nuevo bloque, lo aplica al State y actualiza el blockchain
-func (tx *RawTx) ApplyTxAndCreateBlock(from common.Address, chain []*Block, state *State) (string, error) {
+func (tx *RawTx) ApplyTxAndCreateBlock(from common.Address, chain *[]*Block, state *State) (string, error) {
 	// 1. Validar nonce
 	currentNonce := state.GetNonce(from.Hex())
 	fmt.Printf("From: %s \n", from.Hex())
@@ -124,11 +134,12 @@ func (tx *RawTx) ApplyTxAndCreateBlock(from common.Address, chain []*Block, stat
 	//newBlock := srv.createBlock([]core.DecodedTx{tx})
 
 	stateRoot, _ := state.Root()
-
-	newBlock := CreateBlock(chain, []RawTx{*tx}, stateRoot)
+	fmt.Printf("TX: %+v\n", tx)
+	newBlock := CreateBlock(*chain, []RawTx{*tx}, stateRoot)
 	// Lo añadimos a la "blockchain" (en tu caso, podrías tener un array de bloques)
-	chain = append(chain, newBlock)
-	fmt.Printf("chain: %v \n", chain)
+	fmt.Printf("newBlock: %v \n", newBlock)
+	*chain = append(*chain, newBlock)
+	fmt.Printf("chain: %+v \n", chain)
 	// (Opcional) Llamar a tu mecanismo de consenso, broadcast, etc.
 	log.Printf("New block created #%d with 1 TX\n", newBlock.Header.BlockNumber)
 
@@ -136,33 +147,3 @@ func (tx *RawTx) ApplyTxAndCreateBlock(from common.Address, chain []*Block, stat
 	return txHash.Hex(), nil
 
 }
-
-/*
-// Validar y aplicar transacciones
-func (s *State) ApplyTransaction(tx *Transaction) error {
-	// 1. Verificamos que el nonce sea el esperado
-	currentNonce := s.GetNonce(tx.From)
-	if tx.Nonce != currentNonce {
-		return errors.New("invalid nonce")
-	}
-
-	// 2. Checamos que haya balance suficiente
-	if s.Balances[tx.From] < tx.Amount {
-		return errors.New("insufficient balance")
-	}
-
-	// 3. Efectuamos la transferencia
-	s.Balances[tx.From] -= tx.Amount
-	s.Balances[tx.To] += tx.Amount
-
-	// 4. Incrementamos el nonce de la cuenta origen
-	s.IncrementNonce(tx.From)
-
-	// 5. (Opcional) Actualizar la Merkle Trie
-	err := s.UpdateMerkle()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}*/

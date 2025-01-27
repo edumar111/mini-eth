@@ -4,6 +4,7 @@ package core
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 )
 
@@ -67,13 +68,10 @@ func CreateBlock(chain []*Block, rawTxs []RawTx, stateRoot string) *Block {
 		blockNumber = uint64(len(chain))
 	}
 
-	// Obtener stateRoot si lo necesitas
-	//stateRoot, _ := srv.State.Root()
-
 	// Crear el bloque
 	block := NewBlock(parentHash, blockNumber, txPointers, stateRoot)
 	// (Opcional) Añadir otra lógica de consenso, sellado, etc.
 	// Anexar el bloque a tu chain
-	//chain = append(chain, block)
+	fmt.Printf("Block: %+v\n", block)
 	return block
 }
