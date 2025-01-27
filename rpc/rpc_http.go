@@ -2,15 +2,11 @@
 package rpc
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/edumar111/my-geth-edu/core"
-	"github.com/ethereum/go-ethereum/rlp"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 )
 
 type RPCServer struct {
@@ -57,14 +53,14 @@ func (srv *RPCServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		response.Result = "pong"
 	case "eth_getTransactionCount":
 		// Esperamos params[0] = address, params[1] = "latest"
-		nonceHex, err := srv.handleGetTransactionCount(req.Params)
+		nonceHex, err := HandleGetTransactionCount(srv, req.Params)
 		if err != nil {
 			response.Error = err.Error()
 		} else {
 			response.Result = nonceHex
 		}
 	case "eth_sendRawTransaction":
-		txHash, err := srv.handleSendRawTransaction(req.Params)
+		txHash, err := HandleSendRawTransaction(srv, req.Params)
 		if err != nil {
 			response.Error = err.Error()
 		} else {
@@ -82,7 +78,7 @@ func (srv *RPCServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSendRawTransaction decodifica la TX en hex RLP, la firma y la inserta en un nuevo bloque
-func (srv *RPCServer) handleSendRawTransaction(params []interface{}) (string, error) {
+/*func (srv *RPCServer) handleSendRawTransaction(params []interface{}) (string, error) {
 	//TODO solo para probar la demo****************
 	srv.State.Nonces["0x4709421B04e70e3925dFC86307727b588709C7bB"] = 1
 	srv.State.Balances["0x4709421B04e70e3925dFC86307727b588709C7bB"] = 9000000000000000000 //9 ETH
@@ -118,15 +114,7 @@ func (srv *RPCServer) handleSendRawTransaction(params []interface{}) (string, er
 	}
 
 	// Crear una transacción "interna" en nuestro State
-	/*decodedTx := core.DecodedTx{
-		Nonce: rawTx.Nonce,
-		From:  fromAddr,
-		To:    rawTx.To,
-		Value: rawTx.Value,
-		V:     rawTx.V,
-		R:     rawTx.R,
-		S:     rawTx.S,
-	}*/
+
 
 	// Aplicar la transacción al State
 	// (aquí simplificamos: ignoramos gas, etc.)
@@ -138,31 +126,7 @@ func (srv *RPCServer) handleSendRawTransaction(params []interface{}) (string, er
 	// Por convención, podríamos retornar un "txHash" que sería Keccak(rlp(tx))
 
 	return txHash, nil
-}
-
-// handleGetTransactionCount extrae el nonce y lo devuelve en hex
-func (srv *RPCServer) handleGetTransactionCount(params []interface{}) (string, error) {
-	// Validamos parámetros
-	if len(params) < 2 {
-		return "", fmt.Errorf("invalid params")
-	}
-	address, ok := params[0].(string)
-	if !ok {
-		return "", fmt.Errorf("invalid address param")
-	}
-	blockParam, ok := params[1].(string)
-	if !ok {
-		return "", fmt.Errorf("invalid block param")
-	}
-	if blockParam != "latest" {
-		return "", fmt.Errorf("only 'latest' blockParam is supported")
-	}
-
-	nonce := srv.State.GetNonce(address)
-	// Lo retornamos en formato hex '0x...' como hace Ethereum
-	nonceHex := "0x" + strconv.FormatUint(nonce, 16)
-	return nonceHex, nil
-}
+}*/
 
 // / que nos handles
 // applyTxAndCreateBlock añade la TX a un nuevo bloque, lo aplica al State y actualiza el blockchain

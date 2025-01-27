@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 var upgrader = websocket.Upgrader{}
@@ -29,7 +28,8 @@ type RPCResponse struct {
 }
 type RPCWSServer struct {
 	// Aquí también podemos almacenar un State o Blockchain
-	State *core.State
+	State      *core.State
+	Blockchain []*core.Block
 }
 
 // Inicia el servidor WebSocket
@@ -87,25 +87,28 @@ func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 			JSONRPC: "2.0",
 			ID:      request.ID,
 		}
-
+		nodoRPC := &RPCServer{
+			State:      wsServer.State,
+			Blockchain: wsServer.Blockchain,
+		}
 		switch request.Method {
 		case "ping":
 			response.Result = "pong"
 
 		case "eth_getTransactionCount":
-			nonceHex, err := wsServer.handleGetTransactionCount(request.Params)
+			nonceHex, err := HandleGetTransactionCount(nodoRPC, request.Params)
 			if err != nil {
 				response.Error = err.Error()
 			} else {
 				response.Result = nonceHex
 			}
-		/*case "eth_sendRawTransaction":
-		txHash, err := wsServer.handleSendRawTransaction(request.Params)
-		if err != nil {
-			response.Error = err.Error()
-		} else {
-			response.Result = txHash
-		}*/
+		case "eth_sendRawTransaction":
+			txHash, err := HandleSendRawTransaction(nodoRPC, request.Params)
+			if err != nil {
+				response.Error = err.Error()
+			} else {
+				response.Result = txHash
+			}
 		default:
 			response.Error = fmt.Sprintf("Method '%s' not found", request.Method)
 		}
@@ -121,26 +124,6 @@ func (wsServer *RPCWSServer) handleConnection(conn *websocket.Conn) {
 			return
 		}
 	}
-}
-
-func (wsServer *RPCWSServer) handleGetTransactionCount(params []interface{}) (string, error) {
-	if len(params) < 2 {
-		return "", fmt.Errorf("invalid params")
-	}
-	address, ok := params[0].(string)
-	if !ok {
-		return "", fmt.Errorf("invalid address param")
-	}
-	blockParam, ok := params[1].(string)
-	if !ok {
-		return "", fmt.Errorf("invalid block param")
-	}
-	if blockParam != "latest" {
-		return "", fmt.Errorf("only 'latest' supported")
-	}
-
-	nonce := wsServer.State.GetNonce(address)
-	return "0x" + strconv.FormatUint(nonce, 16), nil
 }
 
 // Método auxiliar para enviar un error si el mensaje no es válido
